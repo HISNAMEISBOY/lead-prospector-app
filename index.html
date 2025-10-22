@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -231,10 +231,22 @@
                     const result = await response.json();
                     
                     // The text part should contain the JSON string
-                    const jsonString = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    let jsonString = result.candidates?.[0]?.content?.parts?.[0]?.text;
                     
                     if (jsonString) {
-                         // Added for debugging the user's error report:
+                         // *** CRITICAL FIX: Aggressively strip surrounding text/markdown/newlines ***
+                         // Find the first '[' and the last ']' to isolate the JSON array
+                         const start = jsonString.indexOf('[');
+                         const end = jsonString.lastIndexOf(']');
+
+                         if (start !== -1 && end !== -1 && end > start) {
+                            jsonString = jsonString.substring(start, end + 1).trim();
+                         } else {
+                            // If brackets aren't found (e.g., model returned empty text), fail gracefully.
+                            throw new Error("Could not locate valid JSON array markers.");
+                         }
+                         // End CRITICAL FIX
+
                          console.log("Raw API Response Text (for debugging JSON parsing issue):", jsonString);
                          return JSON.parse(jsonString);
                     }
@@ -488,12 +500,3 @@
             }
         });
 
-
-        // Optional: Run initial search on page load to show example data
-        window.onload = () => {
-             // For demonstration, trigger the simulated call immediately
-             handleGenerateLeads();
-        };
-    </script>
-</body>
-</html>
