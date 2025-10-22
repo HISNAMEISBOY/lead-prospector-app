@@ -172,7 +172,11 @@
          * Core function to generate leads by calling the Gemini API with Google Search grounding.
          */
         async function simulateGoogleSearch(query) {
-            const apiKey = "";
+            // *** FIX: Read API Key from environment for Netlify deployment ***
+            const apiKey = typeof import.meta.env.VITE_GEMINI_API_KEY !== 'undefined' ? import.meta.env.VITE_GEMINI_API_KEY : "";
+            // The Canvas environment automatically provides the key, but Netlify needs the ENV VAR.
+            // If the key is still empty (e.g., local file open without VITE), the call will still fail.
+
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
             
             // --- AI PROMPT DEFINITIONS (The "Code Talk") ---
@@ -218,6 +222,11 @@
             // Simplified fetch with simulated exponential backoff (for presentation purposes)
             for (let i = 0; i < 3; i++) {
                 try {
+                    // *** CRITICAL CHECK: Fail immediately if API Key is missing on Netlify ***
+                    if (apiKey === "") {
+                         throw new Error("API Key Missing. Please configure VITE_GEMINI_API_KEY environment variable on Netlify.");
+                    }
+                    
                     const response = await fetch(apiUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -235,14 +244,12 @@
                     
                     if (jsonString) {
                          // *** CRITICAL FIX: Aggressively strip surrounding text/markdown/newlines ***
-                         // Find the first '[' and the last ']' to isolate the JSON array
                          const start = jsonString.indexOf('[');
                          const end = jsonString.lastIndexOf(']');
 
                          if (start !== -1 && end !== -1 && end > start) {
                             jsonString = jsonString.substring(start, end + 1).trim();
                          } else {
-                            // If brackets aren't found (e.g., model returned empty text), fail gracefully.
                             throw new Error("Could not locate valid JSON array markers.");
                          }
                          // End CRITICAL FIX
@@ -463,11 +470,15 @@
                 console.error("Lead generation failed:", error);
                 
                 // --- Display a user-friendly error message ---
-                if (error.message.includes("Failed to get live leads")) {
-                    errorMsg.textContent = "Live lead search failed. Please try again with a different, less complex query (e.g., 'Bakeries in Sydney' instead of 'Vintage Bookstores near downtown Berlin'). Displaying fallback data for now.";
+                if (error.message.includes("API Key Missing")) {
+                    errorMsg.textContent = "CRITICAL: Live search failed. You must configure your Gemini API Key as an environment variable named VITE_GEMINI_API_KEY in Netlify to run live searches. Showing fallback data.";
+                    renderResults(SIMULATED_LEADS);
+                } else if (error.message.includes("Failed to get live leads")) {
+                    errorMsg.textContent = "Live search failed. The API search service is currently unavailable or the query was too broad/specific. Please try again with a different niche. Showing fallback data.";
                     renderResults(SIMULATED_LEADS);
                 } else {
-                    errorMsg.textContent = "An unknown error occurred during the lead analysis. Check the console for details.";
+                    errorMsg.textContent = "An unknown error occurred during the lead analysis. Check the console for details. Showing fallback data.";
+                    renderResults(SIMULATED_LEADS);
                 }
                 errorMsg.classList.remove('hidden');
                 
@@ -499,6 +510,8 @@
                 reasonModal.classList.add('hidden');
             }
         });
+
+
         // Optional: Run initial search on page load to show example data
         window.onload = () => {
              // For demonstration, trigger the simulated call immediately
